@@ -6,7 +6,7 @@ from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi.responses import JSONResponse
 
 # Create FastAPI app instance
 app = FastAPI()
@@ -51,21 +51,32 @@ class UserModel(BaseModel):
 async def get_index():
     return FileResponse("index.html")
 
+@app.get("/dashboard.html")
+async def get_index():
+    return FileResponse("dashboard.html")
+
 # Route to add data to the Users table
 @app.post("/add-data")
 def add_data(user_data: UserModel, db: Session = Depends(get_db)):
-    try:
-        print("Received data:", user_data)
+    user = db.query(UserData).filter(UserData.email == user_data.email).first()
+    if not user:
         db_user = UserData(email=user_data.email, password=user_data.password)
-        print("Adding user to database:", db_user)
         db.add(db_user)
         db.commit()
-        print("User added successfully")
         db.refresh(db_user)
-        return {"message": "Data added successfully"}
-    except SQLAlchemyError as e:
-        # Print error message
-        print("Error occurred during data insertion:", str(e))
-        
-        # Return error response
-        raise HTTPException(status_code=500, detail="An error occurred while adding data to the database")
+        data = {"message": "Data added successfully"}
+        return JSONResponse(content=data)
+    else:
+        data = {"message": "Email has been used"}
+        return JSONResponse(content=data)
+    
+@app.post("/login")
+def login(user_data: UserModel, db: Session = Depends(get_db)):
+    user = db.query(UserData).filter(UserData.email == user_data.email).first()
+    if not user:
+        data = {"message": "User not found"}
+        return JSONResponse(content=data)
+    if user.password != user_data.password:
+        return {"message": "wrong password"}
+    else:
+        return {"message": "Login successful"}
